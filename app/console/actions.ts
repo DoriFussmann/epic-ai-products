@@ -2,7 +2,7 @@
 import { assertAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parse } from "csv-parse/sync";
-import { assignLeads, computeHI, type Person, type TerritoryRule } from "@/lib/pipeline";
+import { assignLeads, computeHI, type Person } from "@/lib/pipeline";
 
 function toPeople(csv: string): Person[] {
   const rows = parse(csv, { columns: true, skip_empty_lines: true, relax_quotes: true, relax_column_count: true, trim: true }) as any[];
@@ -24,17 +24,10 @@ export async function runAssignment(formData: FormData) {
   const cc = toPeople(await ccFile.text());
   const db = createAdminClient();
 
-  const { data: liveClients } = await db.from("clients").select("id").eq("is_live", true);
-  const liveIds = new Set((liveClients ?? []).map((c) => c.id));
-  const { data: terr } = await db.from("client_territories").select("client_id, state, city");
-  const territories: TerritoryRule[] = (terr ?? [])
-    .filter((t) => liveIds.has(t.client_id))
-    .map((t) => ({ clientId: t.client_id, state: t.state, city: t.city }));
-
   const { data: owned } = await db.from("leads").select("al_uuid");
   const alreadyOwned = new Set((owned ?? []).map((l) => l.al_uuid));
 
-  const result = assignLeads({ fs, cc, territories, alreadyOwned });
+  const result = assignLeads({ fs, cc, territories: [], alreadyOwned });
 
   if (result.assignments.length) {
     const rows = result.assignments.map((a) => ({

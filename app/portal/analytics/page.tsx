@@ -8,7 +8,6 @@ import { Section } from "@/app/console/clients/client-fields";
 
 const RANGES = [7, 30, 90] as const;
 type Range = (typeof RANGES)[number];
-const LISTS = ["FS", "CC", "HI"] as const;
 
 function utcYmd(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -56,74 +55,50 @@ export default async function PortalAnalytics({
   const endDate = utcYmd(end);
 
   const db = await createClient();
-  const [{ data }, { data: clientRow }, { data: campaignRows }] = await Promise.all([
+  const [{ data }, { data: clientRow }] = await Promise.all([
     db
       .from("metric_snapshots")
-      .select("list_type, snapshot_date, sent, opens, replies")
+      .select("snapshot_date, sent, opens, replies, bounces")
       .eq("channel", "email")
       .gte("snapshot_date", startDate)
       .lte("snapshot_date", endDate)
       .order("snapshot_date", { ascending: true }),
-    db.from("clients").select("instantly_account").eq("id", clientId).maybeSingle(),
-    db.from("client_campaigns").select("list_type, external_campaign_id").eq("channel", "email"),
+    db.from("clients").select("instantly_campaign_id").eq("id", clientId).maybeSingle(),
   ]);
 
-  const instantlyAccount = clientRow?.instantly_account === "B" ? "B" : "A";
-  const campaignIdByList = Object.fromEntries(
-    (campaignRows ?? []).map((row) => [row.list_type, row.external_campaign_id as string]),
-  ) as Record<string, string | undefined>;
-  const linkedLists = LISTS.filter((list) => (campaignRows ?? []).some((row) => row.list_type === list));
-
+  const campaignId = clientRow?.instantly_campaign_id?.trim() ?? "";
   const rows = data ?? [];
   let sent = 0;
   let opens = 0;
   let replies = 0;
-  const byList: Record<(typeof LISTS)[number], { sent: number; opens: number; replies: number }> = {
-    FS: { sent: 0, opens: 0, replies: 0 },
-    CC: { sent: 0, opens: 0, replies: 0 },
-    HI: { sent: 0, opens: 0, replies: 0 },
-  };
+  let storedBounces = 0;
 
   for (const row of rows) {
-    const s = row.sent ?? 0;
-    const o = row.opens ?? 0;
-    const r = row.replies ?? 0;
-    sent += s;
-    opens += o;
-    replies += r;
-
-    const list = row.list_type as (typeof LISTS)[number];
-    if (byList[list]) {
-      byList[list].sent += s;
-      byList[list].opens += o;
-      byList[list].replies += r;
-    }
+    sent += row.sent ?? 0;
+    opens += row.opens ?? 0;
+    replies += row.replies ?? 0;
+    storedBounces += row.bounces ?? 0;
   }
 
-  const campaignLookups = await Promise.all(
-    linkedLists.map((list) => {
-      const id = campaignIdByList[list]?.trim();
-      if (!id) return Promise.all([Promise.resolve(null), Promise.resolve(null)]);
-      return Promise.all([
-        getCampaignInfo(id, instantlyAccount),
-        getCampaignOverview(id, startDate, endDate, instantlyAccount),
-      ]);
-    }),
-  );
-  const campaigns = linkedLists.map((list, i) => {
-    const [info, overview] = campaignLookups[i];
-    const metrics = byList[list];
-    const inRange = metrics.sent > 0;
-    return {
-      list,
-      name: info?.name || list,
-      info,
-      sent: metrics.sent,
-      opens: metrics.opens,
-      replies: metrics.replies,
-      bounces: inRange ? (overview?.bounces ?? 0) : 0,
-    };
-  });
+  const [info, overview] = campaignId
+    ? await Promise.all([
+        getCampaignInfo(campaignId),
+        getCampaignOverview(campaignId, startDate, endDate),
+      ])
+    : [null, null];
+  const campaigns = campaignId
+    ? [
+        {
+          list: campaignId,
+          name: info?.name || "Email campaign",
+          info,
+          sent,
+          opens,
+          replies,
+          bounces: sent > 0 ? (overview?.bounces ?? storedBounces) : 0,
+        },
+      ]
+    : [];
   const totalBounces = campaigns.reduce((sum, campaign) => sum + (campaign.sent > 0 ? campaign.bounces : 0), 0);
   const empty = sent === 0;
   const openRate = rate(opens, sent);

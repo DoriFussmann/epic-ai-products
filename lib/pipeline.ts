@@ -1,4 +1,4 @@
-// DaybreakLabs — nightly pipeline core logic.
+// Epic AI Products — nightly pipeline core logic.
 // PURE functions only: no DB, no HTTP. That is deliberate — this is the
 // correctness-critical part, so it must be unit-testable with zero infra.
 // Wire the I/O (AudienceLab pull, Supabase persist, Instantly push) around it.

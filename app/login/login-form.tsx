@@ -25,10 +25,10 @@ function BrandingPanel() {
       <div className="relative z-10">
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white">
-            <span style={{ color: "var(--ink)", fontSize: 18, fontWeight: 500 }}>D</span>
+            <span style={{ color: "var(--ink)", fontSize: 18, fontWeight: 500 }}>E</span>
           </div>
           <span className="font-sans text-2xl tracking-tight text-white" style={{ fontWeight: 300 }}>
-            DaybreakLabs
+            Epic AI Products
           </span>
         </div>
       </div>
@@ -58,10 +58,10 @@ function MobileLogo() {
   return (
     <div className="mb-6 flex items-center justify-center gap-2 md:hidden">
       <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "var(--ink)" }}>
-        <span style={{ color: "#fff", fontSize: 16, fontWeight: 500 }}>D</span>
+        <span style={{ color: "#fff", fontSize: 16, fontWeight: 500 }}>E</span>
       </div>
       <span className="text-2xl tracking-tight" style={{ color: "var(--ink)", fontWeight: 300 }}>
-        DaybreakLabs
+        Epic AI Products
       </span>
     </div>
   );
@@ -188,10 +188,10 @@ export function LoginForm() {
           </div>
 
           <p style={{ textAlign: "center", color: "var(--ash)", fontSize: 13, marginTop: 24 }}>
-            Access is limited to DaybreakLabs operators and clients.
+            Access is limited to Epic AI Products operators and clients.
           </p>
           <p style={{ textAlign: "center", color: "var(--ash)", fontSize: 12, marginTop: 32, opacity: 0.7 }}>
-            © {new Date().getFullYear()} DaybreakLabs. All rights reserved.
+            © {new Date().getFullYear()} Epic AI Products. All rights reserved.
           </p>
         </div>
       </div>

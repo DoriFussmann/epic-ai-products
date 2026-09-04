@@ -1,4 +1,4 @@
-# DaybreakLabs — Design System
+# Epic AI Products — Design System
 
 The visual language for the app. Adapted from the "Rupert" aesthetic (parchment / ink / brass,
 Inter at light weights, editorial restraint) and applied to product surfaces: console, portal,

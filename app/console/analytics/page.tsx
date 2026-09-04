@@ -53,17 +53,17 @@ export default async function ConsoleAnalytics({
   const adminDb = createAdminClient();
   const { data: clientRows } = await adminDb
     .from("clients")
-    .select("id, name, company_name")
+    .select("id, name")
     .order("name");
   const clients = (clientRows ?? []).map((c) => ({
     id: c.id as string,
-    name: (c.company_name ?? c.name) as string,
+    name: c.name as string,
   }));
   const names = new Map(clients.map((c) => [c.id, c.name]));
 
   let q = adminDb
     .from("metric_snapshots")
-    .select("client_id, list_type, snapshot_date, sent, opens, clicks, replies")
+    .select("client_id, snapshot_date, sent, opens, clicks, replies")
     .eq("channel", "email")
     .gte("snapshot_date", startDate)
     .lte("snapshot_date", endDate)
@@ -77,7 +77,7 @@ export default async function ConsoleAnalytics({
   let clicks = 0;
   let replies = 0;
   const byDate = new Map<string, DailyPoint>();
-  const byCampaign = new Map<string, { clientId: string; list: string; sent: number; replies: number }>();
+  const byCampaign = new Map<string, { clientId: string; sent: number; replies: number }>();
 
   for (const row of rows) {
     const s = row.sent ?? 0;
@@ -96,10 +96,9 @@ export default async function ConsoleAnalytics({
     day.replies += r;
     byDate.set(date, day);
 
-    const key = `${row.client_id}:${row.list_type}`;
+    const key = row.client_id;
     const group = byCampaign.get(key) ?? {
       clientId: row.client_id,
-      list: row.list_type,
       sent: 0,
       replies: 0,
     };
@@ -112,7 +111,7 @@ export default async function ConsoleAnalytics({
   const campaigns = [...byCampaign.values()]
     .filter((g) => g.sent > 0)
     .map((g) => ({
-      label: `${names.get(g.clientId) ?? "Unknown"} — ${g.list}`,
+      label: names.get(g.clientId) ?? "Unknown",
       sent: g.sent,
       replyRate: rate(g.replies, g.sent),
     }))
@@ -177,7 +176,7 @@ export default async function ConsoleAnalytics({
             </div>
 
             {campaigns.length > 0 && (
-              <Section title="By Campaign">
+              <Section title="By Client">
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>

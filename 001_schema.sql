@@ -1,8 +1,9 @@
--- DaybreakLabs — v1 schema + Row-Level Security
+-- Epic AI Products — v1 schema + Row-Level Security
 -- Postgres 15 / Supabase. Run once (e.g. supabase migration or SQL editor).
 -- Design notes:
 --   * al_uuid (AudienceLab UUID) is the identity key: dedup, persistence, HI-match.
 --   * A person is owned by exactly ONE client, ever -> global unique index on leads.al_uuid.
+--   * Each client has one Instantly campaign. The Instantly API key is env-only.
 --   * The nightly pipeline runs as service_role (bypasses RLS) and does all writes.
 --   * Client portal is READ-ONLY through RLS; a client can only ever see its own rows.
 
@@ -11,7 +12,6 @@ create extension if not exists pgcrypto;
 -- ---------- enums ----------
 create type list_type    as enum ('FS','CC','HI');
 create type channel      as enum ('email','linkedin');
-create type posting_mode as enum ('opt_in','opt_out');
 create type alert_scope  as enum ('admin','client');
 create type severity     as enum ('info','warning','error');
 create type user_role    as enum ('superadmin','admin','client');
@@ -27,20 +27,13 @@ create table profiles (
 );
 
 create table clients (
-  id            uuid primary key default gen_random_uuid(),
-  name          text not null,
-  paid          boolean not null default false,
-  is_live       boolean not null default false,          -- admin flips clients live manually
-  posting_mode  posting_mode not null default 'opt_out',
-  linkedin_auth_status text not null default 'pending',  -- pending | connected  (legacy; UI derives HeyReach / Post4Me separately)
-  post4me_prompt text,                                    -- per-client flavor prompt (v3)
-  company_name  text,
-  key_contact   text,
-  key_contact_email text,
-  phone         text,
-  website       text,
-  site_pixel    text,
-  created_at    timestamptz not null default now()
+  id                     uuid primary key default gen_random_uuid(),
+  name                   text not null,                 -- company name
+  is_live                boolean not null default false,
+  website                text,
+  site_pixel             text,
+  instantly_campaign_id  text,
+  created_at             timestamptz not null default now()
 );
 
 -- maps an auth user to the client(s) they can see
@@ -48,27 +41,6 @@ create table client_members (
   user_id   uuid not null references auth.users(id) on delete cascade,
   client_id uuid not null references clients(id) on delete cascade,
   primary key (user_id, client_id)
-);
-
--- ---------- territory (state + optional city) ----------
--- One row = one rule. city NULL means the whole state belongs to this client.
--- Overlaps across clients are allowed on purpose -> that is the round-robin case.
-create table client_territories (
-  id         uuid primary key default gen_random_uuid(),
-  client_id  uuid not null references clients(id) on delete cascade,
-  state      char(2) not null,        -- normalized upper, e.g. 'CA'
-  city       text                     -- normalized upper, or NULL for whole-state
-);
-create index client_territories_state_city_idx on client_territories (state, city);
-
--- ---------- campaign id mapping (Instantly / HeyReach) ----------
-create table client_campaigns (
-  id                  uuid primary key default gen_random_uuid(),
-  client_id           uuid not null references clients(id) on delete cascade,
-  channel             channel not null,
-  list_type           list_type not null,
-  external_campaign_id text not null,   -- Instantly or HeyReach campaign id
-  unique (client_id, channel, list_type)
 );
 
 -- ---------- leads (the owned, growing audience file — LEAN subset only) ----------
@@ -98,7 +70,6 @@ create table metric_snapshots (
   id            uuid primary key default gen_random_uuid(),
   client_id     uuid not null references clients(id) on delete cascade,
   channel       channel not null,
-  list_type     list_type not null,
   snapshot_date date not null,
   sent int not null default 0,
   delivered int not null default 0,
@@ -106,7 +77,7 @@ create table metric_snapshots (
   clicks int not null default 0,
   replies int not null default 0,
   bounces int not null default 0,
-  unique (client_id, channel, list_type, snapshot_date)
+  unique (client_id, channel, snapshot_date)
 );
 
 -- ---------- in-portal alerts ----------
@@ -169,6 +140,17 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+insert into public.profiles (id, role)
+select
+  id,
+  case lower(coalesce(raw_user_meta_data->>'role', ''))
+    when 'superadmin' then 'superadmin'::public.user_role
+    when 'admin' then 'admin'::public.user_role
+    else 'client'::public.user_role
+  end
+from auth.users
+on conflict (id) do nothing;
+
 create or replace function public.is_admin() returns boolean
   language sql stable security definer set search_path = public as $$
   select coalesce(
@@ -185,8 +167,6 @@ $$;
 alter table profiles           enable row level security;
 alter table clients            enable row level security;
 alter table client_members     enable row level security;
-alter table client_territories enable row level security;
-alter table client_campaigns   enable row level security;
 alter table leads              enable row level security;
 alter table metric_snapshots   enable row level security;
 alter table alerts             enable row level security;
@@ -203,11 +183,6 @@ create policy p_clients_read on clients for select
 create policy p_members_read on client_members for select
   using (public.is_admin() or user_id = auth.uid());
 
--- the per-client, read-only tables — same shape everywhere
-create policy p_terr_read on client_territories for select
-  using (public.is_admin() or client_id in (select public.current_client_ids()));
-create policy p_camp_read on client_campaigns for select
-  using (public.is_admin() or client_id in (select public.current_client_ids()));
 create policy p_leads_read on leads for select
   using (public.is_admin() or owning_client_id in (select public.current_client_ids()));
 create policy p_metrics_read on metric_snapshots for select

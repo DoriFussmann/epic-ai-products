@@ -1,19 +1,18 @@
 const BASE = "https://api.instantly.ai/api/v2";
 export type LeadPush = { email: string; first_name?: string; last_name?: string; company_name?: string };
-export type InstantlyAccount = "A" | "B";
 
-function keyFor(account: InstantlyAccount = "A"): string | undefined {
-  return account === "B" ? process.env.INSTANTLY_API_KEY_B : process.env.INSTANTLY_API_KEY;
+function instantlyKey(): string | undefined {
+  return process.env.INSTANTLY_API_KEY;
 }
 
-function instantlyHeaders(account: InstantlyAccount = "A") {
-  return { "Authorization": `Bearer ${keyFor(account)!}`, "Content-Type": "application/json" };
+function instantlyHeaders() {
+  return { Authorization: `Bearer ${instantlyKey()!}`, "Content-Type": "application/json" };
 }
 
-export async function addLeadToCampaign(campaignId: string, lead: LeadPush, account: InstantlyAccount = "A") {
+export async function addLeadToCampaign(campaignId: string, lead: LeadPush) {
   const res = await fetch(`${BASE}/leads`, {
     method: "POST",
-    headers: instantlyHeaders(account),
+    headers: instantlyHeaders(),
     body: JSON.stringify({
       campaign: campaignId,
       email: lead.email,
@@ -46,9 +45,9 @@ function campaignStatus(raw: unknown): string | null {
   return null;
 }
 
-export async function getCampaignInfo(campaignId: string, account: InstantlyAccount = "A"): Promise<CampaignInfo | null> {
+export async function getCampaignInfo(campaignId: string): Promise<CampaignInfo | null> {
   const id = campaignId.trim();
-  const key = keyFor(account);
+  const key = instantlyKey();
   if (!id || !key) return null;
   try {
     const res = await fetch(`${BASE}/campaigns/${encodeURIComponent(id)}`, {
@@ -65,8 +64,8 @@ export async function getCampaignInfo(campaignId: string, account: InstantlyAcco
   }
 }
 
-export async function getCampaignName(campaignId: string, account: InstantlyAccount = "A"): Promise<string | null> {
-  const info = await getCampaignInfo(campaignId, account);
+export async function getCampaignName(campaignId: string): Promise<string | null> {
+  const info = await getCampaignInfo(campaignId);
   return info?.name ?? null;
 }
 
@@ -81,10 +80,9 @@ export async function getCampaignDailyAnalytics(
   campaignId: string,
   startDate: string,
   endDate: string,
-  account: InstantlyAccount = "A",
 ): Promise<DailyMetric[]> {
   const id = campaignId.trim();
-  const key = keyFor(account);
+  const key = instantlyKey();
   if (!id || !key) return [];
   try {
     const params = new URLSearchParams({
@@ -120,10 +118,9 @@ export async function getCampaignOverview(
   campaignId: string,
   startDate: string,
   endDate: string,
-  account: InstantlyAccount = "A",
 ): Promise<CampaignOverview | null> {
   const id = campaignId.trim();
-  const key = keyFor(account);
+  const key = instantlyKey();
   if (!id || !key) return null;
   try {
     const params = new URLSearchParams({

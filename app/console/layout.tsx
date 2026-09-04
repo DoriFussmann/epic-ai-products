@@ -25,7 +25,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
             href="/console"
             style={{ fontSize: 20, fontWeight: 300, color: "var(--ink)", letterSpacing: "-0.02em" }}
           >
-            DaybreakLabs
+            Epic AI Products
           </a>
           <form action={signOut}>
             <button type="submit" className="btn btn-ghost">

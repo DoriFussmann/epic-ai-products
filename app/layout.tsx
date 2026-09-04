@@ -14,7 +14,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DaybreakLabs",
+  title: "Epic AI Products",
   description: "Lead assignment pipeline",
 };
 

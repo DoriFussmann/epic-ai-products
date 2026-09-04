@@ -1,50 +1,47 @@
 "use server";
 import { assertAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { addLeadToCampaign, type InstantlyAccount } from "@/lib/instantly";
+import { addLeadToCampaign } from "@/lib/instantly";
 
 export async function pushToInstantly() {
   await assertAdmin();
   const db = createAdminClient();
 
-  const { data: campaigns } = await db.from("client_campaigns")
-    .select("client_id, list_type, external_campaign_id").eq("channel", "email");
-  const campMap = new Map<string, string>();
-  for (const c of campaigns ?? []) {
-    if (c.external_campaign_id) campMap.set(`${c.client_id}:${c.list_type}`, c.external_campaign_id);
-  }
-
-  const { data: clientRows } = await db.from("clients").select("id, instantly_account");
-  const accountMap = new Map<string, InstantlyAccount>();
+  const { data: clientRows } = await db.from("clients").select("id, instantly_campaign_id");
+  const campaignByClient = new Map<string, string>();
   for (const row of clientRows ?? []) {
-    accountMap.set(row.id, row.instantly_account === "B" ? "B" : "A");
+    const id = row.instantly_campaign_id?.trim();
+    if (id) campaignByClient.set(row.id, id);
   }
 
-  const { data: leads } = await db.from("leads")
-    .select("id, owning_client_id, email, first_name, last_name, company_name, source_lists")
+  const { data: leads } = await db
+    .from("leads")
+    .select("id, owning_client_id, email, first_name, last_name, company_name")
     .is("pushed_at", null)
     .not("email", "is", null);
 
-  let pushed = 0, skipped = 0;
+  let pushed = 0;
+  let skipped = 0;
   const errors: string[] = [];
 
   for (const lead of leads ?? []) {
-    let didPush = false;
-    for (const list of (lead.source_lists ?? [])) {
-      const campaignId = campMap.get(`${lead.owning_client_id}:${list}`);
-      if (!campaignId) { skipped++; continue; }
-      try {
-        const account = accountMap.get(lead.owning_client_id) ?? "A";
-        await addLeadToCampaign(campaignId, {
-          email: lead.email,
-          first_name: lead.first_name ?? undefined,
-          last_name: lead.last_name ?? undefined,
-          company_name: lead.company_name ?? undefined,
-        }, account);
-        pushed++; didPush = true;
-      } catch (e: any) { errors.push(e.message); }
+    const campaignId = campaignByClient.get(lead.owning_client_id);
+    if (!campaignId) {
+      skipped++;
+      continue;
     }
-    if (didPush) await db.from("leads").update({ pushed_at: new Date().toISOString() }).eq("id", lead.id);
+    try {
+      await addLeadToCampaign(campaignId, {
+        email: lead.email,
+        first_name: lead.first_name ?? undefined,
+        last_name: lead.last_name ?? undefined,
+        company_name: lead.company_name ?? undefined,
+      });
+      pushed++;
+      await db.from("leads").update({ pushed_at: new Date().toISOString() }).eq("id", lead.id);
+    } catch (e: unknown) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
   }
 
   return { ok: true as const, pushed, skipped, errorCount: errors.length, sampleErrors: errors.slice(0, 3) };

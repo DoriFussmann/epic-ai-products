@@ -16,11 +16,11 @@ export default async function PortalLayout({ children }: { children: React.React
   const db = createAdminClient();
   const { data: client } = await db
     .from("clients")
-    .select("id, name, company_name")
+    .select("id, name")
     .eq("id", clientId)
     .maybeSingle();
   if (!client) redirect("/login");
-  const displayName = client.company_name ?? client.name;
+  const displayName = client.name;
 
   return (
     <div>
@@ -37,7 +37,7 @@ export default async function PortalLayout({ children }: { children: React.React
           }}
         >
           <div style={{ fontSize: 20, fontWeight: 300, color: "var(--ink)", letterSpacing: "-0.02em" }}>
-            DaybreakLabs
+            Epic AI Products
           </div>
           <form action={signOut}>
             <button type="submit" className="btn btn-ghost">

@@ -2,7 +2,6 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { linkMembershipsForEmail } from "@/lib/membership";
 
 export type UserRole = "superadmin" | "admin" | "client";
 
@@ -56,11 +55,7 @@ export const getSessionAccess = cache(async (): Promise<SessionAccess | null> =>
     return (data ?? []).map((m) => m.client_id as string);
   };
 
-  let clientIds = await loadIds();
-  if (!isAdmin && clientIds.length === 0 && user.email) {
-    await linkMembershipsForEmail(user.id, user.email);
-    clientIds = await loadIds();
-  }
+  const clientIds = await loadIds();
 
   if (!isAdmin && clientIds.length === 0) {
     const counted = await db
